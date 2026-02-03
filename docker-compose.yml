@@ -1,0 +1,64 @@
+version: '3.8'
+
+# Cloudflare Logpush Receiver Stack
+# Receives logs via HTTP endpoint, stores in Loki, visualizes in Grafana
+
+services:
+  # HTTP endpoint that receives Cloudflare Logpush and forwards to Loki
+  log-receiver:
+    build:
+      context: ./log-receiver
+      dockerfile: Dockerfile
+    container_name: cf-log-receiver
+    ports:
+      - "8088:8088"
+    environment:
+      - LOKI_URL=http://loki:3100
+      - AUTH_TOKEN=${AUTH_TOKEN:-changeme}
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - logpush
+
+  # Loki - Log aggregation system
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - logpush
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:10.3.1
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - logpush
+
+volumes:
+  loki-data:
+  grafana-data:
+
+networks:
+  logpush:
+    driver: bridge
