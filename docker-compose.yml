@@ -6,9 +6,7 @@ version: '3.8'
 services:
   # HTTP endpoint that receives Cloudflare Logpush and forwards to Loki
   log-receiver:
-    build:
-      context: ./log-receiver
-      dockerfile: Dockerfile
+    image: ghcr.io/ckh-rcit/cloudflare-logpush/log-receiver:latest
     container_name: cf-log-receiver
     ports:
       - "8088:8088"
