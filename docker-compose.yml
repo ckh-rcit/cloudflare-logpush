@@ -53,6 +53,8 @@ services:
         target: /etc/grafana/provisioning/datasources/loki.yml
       - source: grafana-dashboards-provider
         target: /etc/grafana/provisioning/dashboards/dashboards.yml
+      - source: grafana-dashboard-cloudflare
+        target: /var/lib/grafana/dashboards/cloudflare-logs.json
     depends_on:
       - loki
     restart: unless-stopped
@@ -122,6 +124,7 @@ configs:
       datasources:
         - name: Loki
           type: loki
+          uid: loki
           access: proxy
           url: http://loki:3100
           isDefault: true
@@ -141,6 +144,9 @@ configs:
           allowUiUpdates: true
           options:
             path: /var/lib/grafana/dashboards
+
+  grafana-dashboard-cloudflare:
+    file: ./grafana/dashboards/cloudflare-logs.json
 
 volumes:
   loki-data:
