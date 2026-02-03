@@ -2,6 +2,7 @@ version: '3.8'
 
 # Cloudflare Logpush Receiver Stack
 # Receives logs via HTTP endpoint, stores in Loki, visualizes in Grafana
+# All configs embedded inline for Portainer Stack compatibility
 
 services:
   # HTTP endpoint that receives Cloudflare Logpush and forwards to Loki
@@ -26,8 +27,10 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./loki/config.yml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
+    configs:
+      - source: loki-config
+        target: /etc/loki/local-config.yaml
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
     networks:
@@ -45,13 +48,99 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    configs:
+      - source: grafana-datasources
+        target: /etc/grafana/provisioning/datasources/loki.yml
+      - source: grafana-dashboards-provider
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
     depends_on:
       - loki
     restart: unless-stopped
     networks:
       - logpush
+
+configs:
+  loki-config:
+    content: |
+      auth_enabled: false
+
+      server:
+        http_listen_port: 3100
+        grpc_listen_port: 9096
+
+      common:
+        instance_addr: 127.0.0.1
+        path_prefix: /loki
+        storage:
+          filesystem:
+            chunks_directory: /loki/chunks
+            rules_directory: /loki/rules
+        replication_factor: 1
+        ring:
+          kvstore:
+            store: inmemory
+
+      query_range:
+        results_cache:
+          cache:
+            embedded_cache:
+              enabled: true
+              max_size_mb: 100
+
+      schema_config:
+        configs:
+          - from: 2020-10-24
+            store: boltdb-shipper
+            object_store: filesystem
+            schema: v11
+            index:
+              prefix: index_
+              period: 24h
+
+      ruler:
+        alertmanager_url: http://localhost:9093
+
+      limits_config:
+        reject_old_samples: true
+        reject_old_samples_max_age: 168h
+        ingestion_rate_mb: 16
+        ingestion_burst_size_mb: 32
+        max_streams_per_user: 10000
+        max_line_size: 256kb
+
+      chunk_store_config:
+        max_look_back_period: 0s
+
+      table_manager:
+        retention_deletes_enabled: true
+        retention_period: 720h
+
+  grafana-datasources:
+    content: |
+      apiVersion: 1
+
+      datasources:
+        - name: Loki
+          type: loki
+          access: proxy
+          url: http://loki:3100
+          isDefault: true
+          editable: false
+
+  grafana-dashboards-provider:
+    content: |
+      apiVersion: 1
+
+      providers:
+        - name: 'Cloudflare Dashboards'
+          orgId: 1
+          folder: 'Cloudflare'
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 30
+          allowUiUpdates: true
+          options:
+            path: /var/lib/grafana/dashboards
 
 volumes:
   loki-data:
